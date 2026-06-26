@@ -1,7 +1,7 @@
 // ── Config ──────────────────────────────────────────────────────────────────
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:8000'
-  : 'https://your-backend.railway.app'; // ← Replace with your Railway URL after deploy
+  : 'https://auto-movie-book.onrender.com'; // ← Replace with your Railway URL after deploy
 
 // ── State ────────────────────────────────────────────────────────────────────
 let selectedMovie   = null;
