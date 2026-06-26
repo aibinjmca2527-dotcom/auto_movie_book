@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CineAlert — Auto BookMyShow Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">🎬</span>
+        <span class="logo-text">CineAlert</span>
+      </div>
+      <div class="header-tag">BookMyShow Auto Monitor</div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-inner">
+      <h1 class="hero-title">Never Miss a<br><span class="accent">Movie Booking</span></h1>
+      <p class="hero-sub">Set your movie, city & theatre. We'll monitor BookMyShow 24/7 and alert you the moment booking opens — with WhatsApp & phone call.</p>
+    </div>
+  </section>
+
+  <!-- Main App -->
+  <main class="app-main">
+    <div class="container">
+
+      <!-- Setup Card -->
+      <div class="card setup-card">
+        <div class="card-header">
+          <div class="step-badge">01</div>
+          <h2>Set Your Preferences</h2>
+        </div>
+
+        <!-- Movie Search -->
+        <div class="field-group">
+          <label class="field-label">🎬 Movie Name</label>
+          <div class="search-wrap">
+            <input type="text" id="movieInput" class="field-input" placeholder="Type movie name... e.g. Pushpa 2" autocomplete="off"/>
+            <div class="dropdown" id="movieDropdown"></div>
+          </div>
+          <div class="selected-movie" id="selectedMovieBox" style="display:none">
+            <img id="selectedMoviePoster" src="" alt="poster" class="mini-poster"/>
+            <div class="selected-movie-info">
+              <div class="selected-movie-name" id="selectedMovieName"></div>
+              <div class="selected-movie-meta" id="selectedMovieMeta"></div>
+            </div>
+            <button class="clear-btn" onclick="clearMovie()">✕</button>
+          </div>
+        </div>
+
+        <!-- City -->
+        <div class="field-group">
+          <label class="field-label">🏙️ City</label>
+          <div class="search-wrap">
+            <input type="text" id="cityInput" class="field-input" placeholder="Type your city... e.g. Mumbai" autocomplete="off"/>
+            <div class="dropdown" id="cityDropdown"></div>
+          </div>
+        </div>
+
+        <!-- Theatre Search -->
+        <div class="field-group">
+          <label class="field-label">🎭 Theatre <span class="optional">(optional)</span></label>
+          <div class="search-wrap">
+            <input type="text" id="theatreInput" class="field-input" placeholder="Type theatre name..." autocomplete="off" disabled/>
+            <div class="dropdown" id="theatreDropdown"></div>
+          </div>
+          <div class="selected-theatre" id="selectedTheatreBox" style="display:none">
+            <div class="theatre-info">
+              <div class="theatre-name" id="selectedTheatreName"></div>
+              <div class="theatre-area" id="selectedTheatreArea"></div>
+            </div>
+            <a id="mapsLink" href="#" target="_blank" class="maps-btn">📍 View on Maps</a>
+            <button class="clear-btn" onclick="clearTheatre()">✕</button>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button class="btn-primary" id="startBtn" onclick="startMonitor()">
+          <span class="btn-icon">🚀</span> Start Monitoring
+        </button>
+
+        <div class="status-msg" id="statusMsg"></div>
+      </div>
+
+      <!-- Active Monitors -->
+      <div class="card monitors-card">
+        <div class="card-header">
+          <div class="step-badge">02</div>
+          <h2>Active Monitors</h2>
+          <button class="refresh-btn" onclick="loadMonitors()">↻ Refresh</button>
+        </div>
+        <div id="monitorsContainer">
+          <div class="empty-state">
+            <div class="empty-icon">🎯</div>
+            <p>No active monitors yet.<br>Set your movie above to start!</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Logs -->
+      <div class="card logs-card">
+        <div class="card-header">
+          <div class="step-badge">03</div>
+          <h2>Activity Log</h2>
+        </div>
+        <div id="logsContainer">
+          <div class="empty-state"><p>No activity yet.</p></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Notification Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>Developed by <strong>Aibin Joseph</strong> · CineAlert v1.0</p>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
