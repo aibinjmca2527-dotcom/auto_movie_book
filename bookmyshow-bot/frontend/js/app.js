@@ -1,7 +1,7 @@
 // ── Config ──────────────────────────────────────────────────────────────────
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:8000'
-  : 'https://auto-movie-book.onrender.com'; // ← Replace with your Railway URL after deploy
+  : 'https://auto-movie-book.onrender.com';
 
 // ── State ────────────────────────────────────────────────────────────────────
 let selectedMovie   = null;
@@ -10,7 +10,6 @@ let selectedTheatre = null;
 let movieDebounce   = null;
 let cityDebounce    = null;
 let theatreDebounce = null;
-let pollTimer       = null;
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,22 +18,19 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTheatreSearch();
   loadMonitors();
   loadLogs();
-  // Auto-refresh monitors every 15 seconds
   setInterval(() => { loadMonitors(); loadLogs(); }, 15000);
 });
 
 // ── Movie Search ──────────────────────────────────────────────────────────────
 function setupMovieSearch() {
-  const input = document.getElementById('movieInput');
+  const input    = document.getElementById('movieInput');
   const dropdown = document.getElementById('movieDropdown');
-
   input.addEventListener('input', () => {
     clearTimeout(movieDebounce);
     const q = input.value.trim();
     if (q.length < 2) { closeDropdown(dropdown); return; }
-    movieDebounce = setTimeout(() => fetchMovies(q), 300);
+    movieDebounce = setTimeout(() => fetchMovies(q), 400);
   });
-
   document.addEventListener('click', (e) => {
     if (!input.contains(e.target) && !dropdown.contains(e.target)) closeDropdown(dropdown);
   });
@@ -42,28 +38,30 @@ function setupMovieSearch() {
 
 async function fetchMovies(q) {
   const dropdown = document.getElementById('movieDropdown');
-  dropdown.innerHTML = '<div class="dropdown-item"><div class="dropdown-info" style="color:#606078">Searching...</div></div>';
+  dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">🔍 Searching movies...</div></div>`;
   dropdown.classList.add('open');
   try {
     const res  = await fetch(`${API}/api/search/movies?q=${encodeURIComponent(q)}`);
+    if (!res.ok) throw new Error('Server error');
     const data = await res.json();
-    if (data.movies.length === 0) {
-      dropdown.innerHTML = '<div class="dropdown-item"><div class="dropdown-info" style="color:#606078">No movies found</div></div>';
+    if (!data.movies || data.movies.length === 0) {
+      dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">No movies found for "<b>${q}</b>"</div></div>`;
       return;
     }
     dropdown.innerHTML = data.movies.map(m => `
       <div class="dropdown-item" onclick="selectMovie(${JSON.stringify(m).replace(/"/g, '&quot;')})">
         ${m.poster
-          ? `<img class="dropdown-poster" src="${m.poster}" alt="${m.name}" onerror="this.style.display='none'">`
+          ? `<img class="dropdown-poster" src="${m.poster}" alt="${m.name}" onerror="this.outerHTML='<div class=\\'dropdown-poster-placeholder\\'>🎬</div>'">`
           : `<div class="dropdown-poster-placeholder">🎬</div>`}
         <div class="dropdown-info">
           <div class="dropdown-name">${m.name}</div>
-          <div class="dropdown-meta">${[m.lang, m.genre].filter(Boolean).join(' · ')}</div>
+          <div class="dropdown-meta">${[m.lang, m.genre].filter(Boolean).join(' · ') || 'Movie'}</div>
         </div>
       </div>
     `).join('');
   } catch (e) {
-    dropdown.innerHTML = '<div class="dropdown-item"><div class="dropdown-info" style="color:#e63946">Error fetching movies</div></div>';
+    dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#e63946">⚠️ Could not fetch movies. Check connection.</div></div>`;
+    console.error('Movie fetch error:', e);
   }
 }
 
@@ -71,16 +69,20 @@ function selectMovie(movie) {
   selectedMovie = movie;
   document.getElementById('movieInput').value = movie.name;
   closeDropdown(document.getElementById('movieDropdown'));
-
   const box = document.getElementById('selectedMovieBox');
-  document.getElementById('selectedMoviePoster').src = movie.poster || '';
-  document.getElementById('selectedMoviePoster').style.display = movie.poster ? 'block' : 'none';
+  const posterEl = document.getElementById('selectedMoviePoster');
+  if (movie.poster) {
+    posterEl.src = movie.poster;
+    posterEl.style.display = 'block';
+  } else {
+    posterEl.style.display = 'none';
+  }
   document.getElementById('selectedMovieName').textContent = movie.name;
-  document.getElementById('selectedMovieMeta').textContent = [movie.lang, movie.genre].filter(Boolean).join(' · ');
+  document.getElementById('selectedMovieMeta').textContent = [movie.lang, movie.genre].filter(Boolean).join(' · ') || 'Movie';
   box.style.display = 'flex';
-
-  // Enable theatre search if city is selected
   if (selectedCity) enableTheatreSearch();
+  // Auto load theatres if city already selected
+  if (selectedCity && selectedMovie) loadTheatresForCity();
 }
 
 function clearMovie() {
@@ -94,14 +96,12 @@ function clearMovie() {
 function setupCitySearch() {
   const input    = document.getElementById('cityInput');
   const dropdown = document.getElementById('cityDropdown');
-
   input.addEventListener('input', () => {
     clearTimeout(cityDebounce);
     const q = input.value.trim();
     if (q.length < 1) { closeDropdown(dropdown); return; }
     cityDebounce = setTimeout(() => fetchCities(q), 200);
   });
-
   document.addEventListener('click', (e) => {
     if (!input.contains(e.target) && !dropdown.contains(e.target)) closeDropdown(dropdown);
   });
@@ -112,13 +112,17 @@ async function fetchCities(q) {
   try {
     const res  = await fetch(`${API}/api/search/cities?q=${encodeURIComponent(q)}`);
     const data = await res.json();
-    if (data.cities.length === 0) { closeDropdown(dropdown); return; }
+    if (!data.cities || data.cities.length === 0) {
+      dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">No cities found</div></div>`;
+      dropdown.classList.add('open');
+      return;
+    }
     dropdown.innerHTML = data.cities.map(c => `
       <div class="dropdown-item" onclick="selectCity('${c.name}', '${c.code}')">
-        <div class="dropdown-poster-placeholder">🏙️</div>
+        <div class="dropdown-poster-placeholder">📍</div>
         <div class="dropdown-info">
           <div class="dropdown-name">${c.name}</div>
-          <div class="dropdown-meta">${c.code}</div>
+          <div class="dropdown-meta">Kerala · ${c.code}</div>
         </div>
       </div>
     `).join('');
@@ -130,68 +134,94 @@ function selectCity(name, code) {
   selectedCity = { name, code };
   document.getElementById('cityInput').value = name;
   closeDropdown(document.getElementById('cityDropdown'));
-  if (selectedMovie) enableTheatreSearch();
+  if (selectedMovie) {
+    enableTheatreSearch();
+    loadTheatresForCity();
+  }
 }
 
 // ── Theatre Search ────────────────────────────────────────────────────────────
+let allTheatres = [];
+
 function setupTheatreSearch() {
   const input    = document.getElementById('theatreInput');
   const dropdown = document.getElementById('theatreDropdown');
-
   input.addEventListener('input', () => {
-    clearTimeout(theatreDebounce);
-    const q = input.value.trim();
-    if (q.length < 1) { closeDropdown(dropdown); return; }
-    theatreDebounce = setTimeout(() => fetchTheatres(q), 300);
+    const q = input.value.trim().toLowerCase();
+    if (q.length < 1) {
+      // Show all theatres when input cleared
+      renderTheatres(allTheatres);
+      return;
+    }
+    const filtered = allTheatres.filter(t => t.name.toLowerCase().includes(q));
+    renderTheatres(filtered);
   });
-
+  input.addEventListener('focus', () => {
+    if (allTheatres.length > 0) renderTheatres(allTheatres);
+  });
   document.addEventListener('click', (e) => {
     if (!input.contains(e.target) && !dropdown.contains(e.target)) closeDropdown(dropdown);
   });
 }
 
-async function fetchTheatres(q) {
+async function loadTheatresForCity() {
   if (!selectedMovie || !selectedCity) return;
   const dropdown = document.getElementById('theatreDropdown');
-  dropdown.innerHTML = '<div class="dropdown-item"><div class="dropdown-info" style="color:#606078">Loading theatres...</div></div>';
+  const input    = document.getElementById('theatreInput');
+  input.placeholder = 'Loading theatres...';
+  dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">🎭 Loading theatres in ${selectedCity.name}...</div></div>`;
   dropdown.classList.add('open');
-
   try {
     const res  = await fetch(`${API}/api/search/theatres?city=${encodeURIComponent(selectedCity.name)}&movie_code=${selectedMovie.code}`);
     const data = await res.json();
-    const filtered = data.theatres.filter(t => t.name.toLowerCase().includes(q.toLowerCase()));
-
-    if (filtered.length === 0) {
-      dropdown.innerHTML = '<div class="dropdown-item"><div class="dropdown-info" style="color:#606078">No theatres found</div></div>';
-      return;
+    allTheatres = data.theatres || [];
+    if (allTheatres.length === 0) {
+      dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">No theatres found in ${selectedCity.name} for this movie yet.<br><small>Booking may not be open yet.</small></div></div>`;
+      input.placeholder = 'No theatres found yet...';
+    } else {
+      input.placeholder = `Search among ${allTheatres.length} theatres...`;
+      renderTheatres(allTheatres);
     }
-
-    dropdown.innerHTML = filtered.map(t => `
-      <div class="dropdown-item" onclick='selectTheatre(${JSON.stringify(t).replace(/'/g, "&#39;")})'>
-        <div class="dropdown-poster-placeholder">🎭</div>
-        <div class="dropdown-info">
-          <div class="dropdown-name">${t.name}</div>
-          <div class="dropdown-meta">${t.area || 'Tap to view location'}</div>
-        </div>
-        <span class="theatre-maps-tag">📍 Maps</span>
-      </div>
-    `).join('');
   } catch (e) {
-    dropdown.innerHTML = '<div class="dropdown-item"><div class="dropdown-info" style="color:#e63946">Error loading theatres</div></div>';
+    dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#e63946">Error loading theatres</div></div>`;
+    input.placeholder = 'Type theatre name...';
   }
+}
+
+function renderTheatres(theatres) {
+  const dropdown = document.getElementById('theatreDropdown');
+  if (theatres.length === 0) {
+    dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">No matching theatres</div></div>`;
+    dropdown.classList.add('open');
+    return;
+  }
+  dropdown.innerHTML = theatres.map(t => `
+    <div class="dropdown-item" onclick='selectTheatre(${JSON.stringify(t).replace(/'/g, "&#39;")})'>
+      <div class="dropdown-poster-placeholder">🎭</div>
+      <div class="dropdown-info">
+        <div class="dropdown-name">${t.name}</div>
+        <div class="dropdown-meta">${t.area || selectedCity?.name || ''}</div>
+      </div>
+      <span class="theatre-maps-tag">📍 Maps</span>
+    </div>
+  `).join('');
+  dropdown.classList.add('open');
+}
+
+async function fetchTheatres(q) {
+  // kept for compatibility but we now use loadTheatresForCity + filter
+  const filtered = allTheatres.filter(t => t.name.toLowerCase().includes(q.toLowerCase()));
+  renderTheatres(filtered);
 }
 
 function selectTheatre(theatre) {
   selectedTheatre = theatre;
   document.getElementById('theatreInput').value = theatre.name;
   closeDropdown(document.getElementById('theatreDropdown'));
-
   document.getElementById('selectedTheatreName').textContent = theatre.name;
-  document.getElementById('selectedTheatreArea').textContent  = theatre.area || '';
+  document.getElementById('selectedTheatreArea').textContent  = theatre.area || selectedCity?.name || '';
   document.getElementById('mapsLink').href = theatre.maps_url || '#';
   document.getElementById('selectedTheatreBox').style.display = 'flex';
-
-  // Auto-open Google Maps
   if (theatre.maps_url) window.open(theatre.maps_url, '_blank');
 }
 
@@ -203,13 +233,14 @@ function clearTheatre() {
 
 function enableTheatreSearch() {
   document.getElementById('theatreInput').disabled = false;
-  document.getElementById('theatreInput').placeholder = 'Type theatre name...';
+  document.getElementById('theatreInput').placeholder = 'Loading theatres...';
 }
 
 function disableTheatreSearch() {
   document.getElementById('theatreInput').disabled = true;
   document.getElementById('theatreInput').value    = '';
   selectedTheatre = null;
+  allTheatres = [];
   document.getElementById('selectedTheatreBox').style.display = 'none';
 }
 
@@ -217,15 +248,13 @@ function disableTheatreSearch() {
 async function startMonitor() {
   if (!selectedMovie) { showToast('Please select a movie first!', 'error'); return; }
   if (!selectedCity)  { showToast('Please select a city!', 'error'); return; }
-
   const btn = document.getElementById('startBtn');
   const msg = document.getElementById('statusMsg');
   btn.disabled = true;
   btn.innerHTML = '<span class="btn-icon">⏳</span> Starting...';
   msg.textContent = '';
-
   try {
-    const res  = await fetch(`${API}/api/monitor`, {
+    const res = await fetch(`${API}/api/monitor`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -237,20 +266,16 @@ async function startMonitor() {
         theatre_url:  selectedTheatre?.maps_url || '',
       })
     });
-
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Error');
-
-    showToast(`✅ Now monitoring "${selectedMovie.name}" in ${selectedCity.name}!`, 'success');
+    showToast(`✅ Monitoring "${selectedMovie.name}" in ${selectedCity.name}!`, 'success');
+    msg.style.color = '#2ecc71';
     msg.textContent = `✅ Monitoring started! You'll get WhatsApp & call when booking opens.`;
-
-    // Reset form
     clearMovie(); clearTheatre();
     selectedCity = null;
+    allTheatres  = [];
     document.getElementById('cityInput').value = '';
-
     loadMonitors();
-
   } catch (e) {
     showToast(e.message, 'error');
     msg.style.color = '#e63946';
@@ -261,19 +286,17 @@ async function startMonitor() {
   }
 }
 
-// ── Load Monitors ─────────────────────────────────────────────────────────────
+// ── Monitors ──────────────────────────────────────────────────────────────────
 async function loadMonitors() {
   const container = document.getElementById('monitorsContainer');
   try {
     const res  = await fetch(`${API}/api/monitors`);
     const data = await res.json();
     const monitors = data.monitors;
-
-    if (monitors.length === 0) {
+    if (!monitors || monitors.length === 0) {
       container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎯</div><p>No active monitors yet.<br>Set your movie above to start!</p></div>`;
       return;
     }
-
     container.innerHTML = monitors.map(m => {
       const isOpen = m.status === 'opened';
       return `
@@ -299,11 +322,10 @@ async function loadMonitors() {
                 : ''}
             </div>
           </div>
-        </div>
-      `;
+        </div>`;
     }).join('');
   } catch (e) {
-    container.innerHTML = `<div class="empty-state"><p style="color:#e63946">Could not connect to server.<br>Make sure backend is running.</p></div>`;
+    container.innerHTML = `<div class="empty-state"><p style="color:#e63946">Could not connect to server.</p></div>`;
   }
 }
 
@@ -313,13 +335,13 @@ async function cancelMonitor(id) {
   loadMonitors();
 }
 
-// ── Load Logs ─────────────────────────────────────────────────────────────────
+// ── Logs ──────────────────────────────────────────────────────────────────────
 async function loadLogs() {
   const container = document.getElementById('logsContainer');
   try {
     const res  = await fetch(`${API}/api/logs`);
     const data = await res.json();
-    if (data.logs.length === 0) {
+    if (!data.logs || data.logs.length === 0) {
       container.innerHTML = '<div class="empty-state"><p>No activity yet.</p></div>';
       return;
     }
@@ -337,8 +359,7 @@ function closeDropdown(el) { el.classList.remove('open'); el.innerHTML = ''; }
 
 function formatDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+  return new Date(iso).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
 }
 
 function showToast(msg, type = '') {
