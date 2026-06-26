@@ -1,25 +1,38 @@
-// ── Config ──────────────────────────────────────────────────────────────────
+// ── Config ────────────────────────────────────────────────────────────────────
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:8000'
   : 'https://auto-movie-book.onrender.com';
 
-// ── State ────────────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
 let selectedMovie   = null;
 let selectedCity    = null;
 let selectedTheatre = null;
+let allTheatres     = [];
 let movieDebounce   = null;
 let cityDebounce    = null;
-let theatreDebounce = null;
 
-// ── Init ─────────────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   setupMovieSearch();
   setupCitySearch();
   setupTheatreSearch();
   loadMonitors();
   loadLogs();
+  loadMovieCount();
   setInterval(() => { loadMonitors(); loadLogs(); }, 15000);
 });
+
+// ── Movie Count ───────────────────────────────────────────────────────────────
+async function loadMovieCount() {
+  try {
+    const res  = await fetch(`${API}/`);
+    const data = await res.json();
+    const el   = document.getElementById('movieCount');
+    if (el && data.movies_in_db !== undefined) {
+      el.textContent = `${data.movies_in_db} movies in database`;
+    }
+  } catch(e) {}
+}
 
 // ── Movie Search ──────────────────────────────────────────────────────────────
 function setupMovieSearch() {
@@ -29,7 +42,7 @@ function setupMovieSearch() {
     clearTimeout(movieDebounce);
     const q = input.value.trim();
     if (q.length < 2) { closeDropdown(dropdown); return; }
-    movieDebounce = setTimeout(() => fetchMovies(q), 400);
+    movieDebounce = setTimeout(() => fetchMovies(q), 350);
   });
   document.addEventListener('click', (e) => {
     if (!input.contains(e.target) && !dropdown.contains(e.target)) closeDropdown(dropdown);
@@ -38,14 +51,20 @@ function setupMovieSearch() {
 
 async function fetchMovies(q) {
   const dropdown = document.getElementById('movieDropdown');
-  dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">🔍 Searching movies...</div></div>`;
+  dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">🔍 Searching...</div></div>`;
   dropdown.classList.add('open');
   try {
     const res  = await fetch(`${API}/api/search/movies?q=${encodeURIComponent(q)}`);
     if (!res.ok) throw new Error('Server error');
     const data = await res.json();
     if (!data.movies || data.movies.length === 0) {
-      dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">No movies found for "<b>${q}</b>"</div></div>`;
+      dropdown.innerHTML = `
+        <div class="dropdown-item">
+          <div class="dropdown-info" style="color:#9090a8">
+            No results for "<b>${q}</b>"<br>
+            <small style="color:#606078">Movies update every hour. Try again shortly.</small>
+          </div>
+        </div>`;
       return;
     }
     dropdown.innerHTML = data.movies.map(m => `
@@ -55,13 +74,17 @@ async function fetchMovies(q) {
           : `<div class="dropdown-poster-placeholder">🎬</div>`}
         <div class="dropdown-info">
           <div class="dropdown-name">${m.name}</div>
-          <div class="dropdown-meta">${[m.lang, m.genre].filter(Boolean).join(' · ') || 'Movie'}</div>
+          <div class="dropdown-meta">
+            ${[m.lang, m.genre].filter(Boolean).join(' · ') || 'Movie'}
+            <span class="status-tag ${m.status === 'coming_soon' ? 'coming' : 'showing'}">
+              ${m.status === 'coming_soon' ? '🔜 Coming Soon' : '🎬 Now Showing'}
+            </span>
+          </div>
         </div>
       </div>
     `).join('');
   } catch (e) {
-    dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#e63946">⚠️ Could not fetch movies. Check connection.</div></div>`;
-    console.error('Movie fetch error:', e);
+    dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#e63946">⚠️ Error connecting to server</div></div>`;
   }
 }
 
@@ -69,20 +92,14 @@ function selectMovie(movie) {
   selectedMovie = movie;
   document.getElementById('movieInput').value = movie.name;
   closeDropdown(document.getElementById('movieDropdown'));
-  const box = document.getElementById('selectedMovieBox');
   const posterEl = document.getElementById('selectedMoviePoster');
-  if (movie.poster) {
-    posterEl.src = movie.poster;
-    posterEl.style.display = 'block';
-  } else {
-    posterEl.style.display = 'none';
-  }
+  if (movie.poster) { posterEl.src = movie.poster; posterEl.style.display = 'block'; }
+  else { posterEl.style.display = 'none'; }
   document.getElementById('selectedMovieName').textContent = movie.name;
-  document.getElementById('selectedMovieMeta').textContent = [movie.lang, movie.genre].filter(Boolean).join(' · ') || 'Movie';
-  box.style.display = 'flex';
-  if (selectedCity) enableTheatreSearch();
-  // Auto load theatres if city already selected
-  if (selectedCity && selectedMovie) loadTheatresForCity();
+  document.getElementById('selectedMovieMeta').textContent =
+    [movie.lang, movie.genre].filter(Boolean).join(' · ') || 'Movie';
+  document.getElementById('selectedMovieBox').style.display = 'flex';
+  if (selectedCity) { enableTheatreSearch(); loadTheatresForCity(); }
 }
 
 function clearMovie() {
@@ -127,34 +144,26 @@ async function fetchCities(q) {
       </div>
     `).join('');
     dropdown.classList.add('open');
-  } catch (e) { console.error(e); }
+  } catch(e) { console.error(e); }
 }
 
 function selectCity(name, code) {
   selectedCity = { name, code };
   document.getElementById('cityInput').value = name;
   closeDropdown(document.getElementById('cityDropdown'));
-  if (selectedMovie) {
-    enableTheatreSearch();
-    loadTheatresForCity();
-  }
+  if (selectedMovie) { enableTheatreSearch(); loadTheatresForCity(); }
 }
 
 // ── Theatre Search ────────────────────────────────────────────────────────────
-let allTheatres = [];
-
 function setupTheatreSearch() {
   const input    = document.getElementById('theatreInput');
   const dropdown = document.getElementById('theatreDropdown');
   input.addEventListener('input', () => {
     const q = input.value.trim().toLowerCase();
-    if (q.length < 1) {
-      // Show all theatres when input cleared
-      renderTheatres(allTheatres);
-      return;
+    if (allTheatres.length > 0) {
+      const filtered = q ? allTheatres.filter(t => t.name.toLowerCase().includes(q)) : allTheatres;
+      renderTheatres(filtered);
     }
-    const filtered = allTheatres.filter(t => t.name.toLowerCase().includes(q));
-    renderTheatres(filtered);
   });
   input.addEventListener('focus', () => {
     if (allTheatres.length > 0) renderTheatres(allTheatres);
@@ -168,23 +177,29 @@ async function loadTheatresForCity() {
   if (!selectedMovie || !selectedCity) return;
   const dropdown = document.getElementById('theatreDropdown');
   const input    = document.getElementById('theatreInput');
-  input.placeholder = 'Loading theatres...';
-  dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">🎭 Loading theatres in ${selectedCity.name}...</div></div>`;
+  input.placeholder = `Loading theatres in ${selectedCity.name}...`;
+  dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">🎭 Loading theatres...</div></div>`;
   dropdown.classList.add('open');
   try {
     const res  = await fetch(`${API}/api/search/theatres?city=${encodeURIComponent(selectedCity.name)}&movie_code=${selectedMovie.code}`);
     const data = await res.json();
     allTheatres = data.theatres || [];
     if (allTheatres.length === 0) {
-      dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#9090a8">No theatres found in ${selectedCity.name} for this movie yet.<br><small>Booking may not be open yet.</small></div></div>`;
-      input.placeholder = 'No theatres found yet...';
+      dropdown.innerHTML = `
+        <div class="dropdown-item">
+          <div class="dropdown-info" style="color:#9090a8">
+            No theatres found yet in ${selectedCity.name}<br>
+            <small style="color:#606078">Booking may not be open yet — monitor will alert you when it opens!</small>
+          </div>
+        </div>`;
+      input.placeholder = 'No theatres yet — monitoring will alert you!';
     } else {
       input.placeholder = `Search among ${allTheatres.length} theatres...`;
       renderTheatres(allTheatres);
     }
-  } catch (e) {
-    dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#e63946">Error loading theatres</div></div>`;
+  } catch(e) {
     input.placeholder = 'Type theatre name...';
+    dropdown.innerHTML = `<div class="dropdown-item"><div class="dropdown-info" style="color:#e63946">Error loading theatres</div></div>`;
   }
 }
 
@@ -196,7 +211,7 @@ function renderTheatres(theatres) {
     return;
   }
   dropdown.innerHTML = theatres.map(t => `
-    <div class="dropdown-item" onclick='selectTheatre(${JSON.stringify(t).replace(/'/g, "&#39;")})'>
+    <div class="dropdown-item" onclick='selectTheatre(${JSON.stringify(t).replace(/'/g,"&#39;")})'>
       <div class="dropdown-poster-placeholder">🎭</div>
       <div class="dropdown-info">
         <div class="dropdown-name">${t.name}</div>
@@ -208,18 +223,12 @@ function renderTheatres(theatres) {
   dropdown.classList.add('open');
 }
 
-async function fetchTheatres(q) {
-  // kept for compatibility but we now use loadTheatresForCity + filter
-  const filtered = allTheatres.filter(t => t.name.toLowerCase().includes(q.toLowerCase()));
-  renderTheatres(filtered);
-}
-
 function selectTheatre(theatre) {
   selectedTheatre = theatre;
   document.getElementById('theatreInput').value = theatre.name;
   closeDropdown(document.getElementById('theatreDropdown'));
   document.getElementById('selectedTheatreName').textContent = theatre.name;
-  document.getElementById('selectedTheatreArea').textContent  = theatre.area || selectedCity?.name || '';
+  document.getElementById('selectedTheatreArea').textContent = theatre.area || selectedCity?.name || '';
   document.getElementById('mapsLink').href = theatre.maps_url || '#';
   document.getElementById('selectedTheatreBox').style.display = 'flex';
   if (theatre.maps_url) window.open(theatre.maps_url, '_blank');
@@ -238,7 +247,7 @@ function enableTheatreSearch() {
 
 function disableTheatreSearch() {
   document.getElementById('theatreInput').disabled = true;
-  document.getElementById('theatreInput').value    = '';
+  document.getElementById('theatreInput').value = '';
   selectedTheatre = null;
   allTheatres = [];
   document.getElementById('selectedTheatreBox').style.display = 'none';
@@ -255,7 +264,7 @@ async function startMonitor() {
   msg.textContent = '';
   try {
     const res = await fetch(`${API}/api/monitor`, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         movie_name:   selectedMovie.name,
@@ -268,15 +277,14 @@ async function startMonitor() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Error');
-    showToast(`✅ Monitoring "${selectedMovie.name}" in ${selectedCity.name}!`, 'success');
+    showToast(`✅ Now monitoring "${selectedMovie.name}" in ${selectedCity.name}!`, 'success');
     msg.style.color = '#2ecc71';
-    msg.textContent = `✅ Monitoring started! You'll get WhatsApp & call when booking opens.`;
+    msg.textContent = `✅ Done! You'll get WhatsApp message + phone call when booking opens.`;
     clearMovie(); clearTheatre();
-    selectedCity = null;
-    allTheatres  = [];
+    selectedCity = null; allTheatres = [];
     document.getElementById('cityInput').value = '';
     loadMonitors();
-  } catch (e) {
+  } catch(e) {
     showToast(e.message, 'error');
     msg.style.color = '#e63946';
     msg.textContent = '❌ ' + e.message;
@@ -292,8 +300,8 @@ async function loadMonitors() {
   try {
     const res  = await fetch(`${API}/api/monitors`);
     const data = await res.json();
-    const monitors = data.monitors;
-    if (!monitors || monitors.length === 0) {
+    const monitors = data.monitors || [];
+    if (monitors.length === 0) {
       container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎯</div><p>No active monitors yet.<br>Set your movie above to start!</p></div>`;
       return;
     }
@@ -324,7 +332,7 @@ async function loadMonitors() {
           </div>
         </div>`;
     }).join('');
-  } catch (e) {
+  } catch(e) {
     container.innerHTML = `<div class="empty-state"><p style="color:#e63946">Could not connect to server.</p></div>`;
   }
 }
@@ -333,6 +341,15 @@ async function cancelMonitor(id) {
   await fetch(`${API}/api/monitor/${id}`, { method: 'DELETE' });
   showToast('Monitor cancelled', 'success');
   loadMonitors();
+}
+
+// ── Refresh Movies Manually ───────────────────────────────────────────────────
+async function refreshMovies() {
+  showToast('🔄 Refreshing movie list...', '');
+  try {
+    await fetch(`${API}/api/movies/refresh`);
+    setTimeout(() => { showToast('✅ Movies refreshed!', 'success'); loadMovieCount(); }, 3000);
+  } catch(e) { showToast('Error refreshing', 'error'); }
 }
 
 // ── Logs ──────────────────────────────────────────────────────────────────────
@@ -351,7 +368,7 @@ async function loadLogs() {
         <div class="log-msg">${l.message}</div>
       </div>
     `).join('');
-  } catch (e) { console.error(e); }
+  } catch(e) { console.error(e); }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -365,6 +382,6 @@ function formatDate(iso) {
 function showToast(msg, type = '') {
   const toast = document.getElementById('toast');
   toast.textContent = msg;
-  toast.className   = `toast ${type} show`;
+  toast.className = `toast ${type} show`;
   setTimeout(() => { toast.className = 'toast'; }, 3500);
 }

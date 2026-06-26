@@ -525,3 +525,42 @@ body {
   .monitor-item { flex-direction: column; }
   .toast { left: 16px; right: 16px; bottom: 16px; }
 }
+
+/* ── v3 Extra Styles ──────────────────────────────────────────────────── */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.movie-count-badge {
+  font-size: 11px;
+  color: var(--text3);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.refresh-movies-btn {
+  font-size: 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.refresh-movies-btn:hover { border-color: var(--accent); color: var(--text); }
+
+.status-tag {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  margin-left: 6px;
+  font-weight: 600;
+}
+.status-tag.showing { background: rgba(46,204,113,0.15); color: #2ecc71; }
+.status-tag.coming  { background: rgba(255,214,10,0.15);  color: #ffd60a; }
