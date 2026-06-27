@@ -18,7 +18,7 @@
     </div>
     <div class="header-right">
       <span class="movie-count-badge" id="movieCount">Loading...</span>
-      <button class="refresh-movies-btn" onclick="refreshMovies()">🔄 Refresh Movies</button>
+      <button class="refresh-movies-btn" onclick="refreshMovies()">🔄 Auto Fetch</button>
     </div>
   </div>
 </header>
@@ -33,18 +33,88 @@
 <main class="app-main">
   <div class="container">
 
-    <!-- Setup Card -->
+    <!-- ── ADD MOVIE MANUALLY ── -->
+    <div class="card add-movie-card">
+      <div class="card-header">
+        <div class="step-badge" style="background:linear-gradient(135deg,#f77f00,#d62828)">➕</div>
+        <h2>Add Movie to Database</h2>
+        <button class="refresh-btn" onclick="toggleAddMovie()">▼ Expand</button>
+      </div>
+
+      <div id="addMovieSection" style="display:none">
+        <div class="info-box">
+          💡 <strong>How to get movie code:</strong><br>
+          Open BookMyShow app → Click any movie → Copy the URL<br>
+          Example URL: <code>https://in.bookmyshow.com/buytickets/<b>varavu</b>/movie-kochi-<b>ET00380235</b>-MT/</code><br>
+          Just paste the full URL below — code is auto extracted! ✅
+        </div>
+
+        <div class="add-movie-form">
+          <div class="field-group">
+            <label class="field-label">📋 Paste BMS Movie URL <span class="optional">(auto extracts code)</span></label>
+            <input type="text" id="bmsUrlInput" class="field-input"
+              placeholder="https://in.bookmyshow.com/buytickets/varavu/movie-kochi-ET00380235-MT/"
+              oninput="extractFromUrl(this.value)"/>
+          </div>
+
+          <div class="form-row">
+            <div class="field-group" style="flex:2">
+              <label class="field-label">🎬 Movie Name *</label>
+              <input type="text" id="addMovieName" class="field-input" placeholder="e.g. Varavu"/>
+            </div>
+            <div class="field-group" style="flex:1">
+              <label class="field-label">🔑 Movie Code *</label>
+              <input type="text" id="addMovieCode" class="field-input" placeholder="e.g. ET00380235"/>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field-group" style="flex:1">
+              <label class="field-label">🌐 Language</label>
+              <input type="text" id="addMovieLang" class="field-input" placeholder="Malayalam"/>
+            </div>
+            <div class="field-group" style="flex:1">
+              <label class="field-label">🎭 Genre</label>
+              <input type="text" id="addMovieGenre" class="field-input" placeholder="Drama"/>
+            </div>
+            <div class="field-group" style="flex:1">
+              <label class="field-label">📅 Status</label>
+              <select id="addMovieStatus" class="field-input">
+                <option value="now_showing">Now Showing</option>
+                <option value="coming_soon">Coming Soon</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn-add" onclick="addMovieManual()">
+            ➕ Add Movie to Database
+          </button>
+          <div class="status-msg" id="addMovieMsg"></div>
+        </div>
+
+        <!-- Movie List -->
+        <div class="movie-list-header">
+          <h3>Movies in Database</h3>
+          <button class="refresh-btn" onclick="loadMovieList()">↻ Refresh</button>
+        </div>
+        <div id="movieListContainer">
+          <div class="empty-state"><p>No movies yet. Add one above!</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SET PREFERENCES ── -->
     <div class="card setup-card">
       <div class="card-header">
         <div class="step-badge">01</div>
         <h2>Set Your Preferences</h2>
       </div>
 
-      <!-- Movie -->
       <div class="field-group">
         <label class="field-label">🎬 Movie Name</label>
         <div class="search-wrap">
-          <input type="text" id="movieInput" class="field-input" placeholder="Type movie name... e.g. Zoom, Varavu" autocomplete="off"/>
+          <input type="text" id="movieInput" class="field-input"
+            placeholder="Type movie name... (add movies above first)" autocomplete="off"/>
           <div class="dropdown" id="movieDropdown"></div>
         </div>
         <div class="selected-movie" id="selectedMovieBox" style="display:none">
@@ -57,20 +127,20 @@
         </div>
       </div>
 
-      <!-- City -->
       <div class="field-group">
         <label class="field-label">🏙️ City / District / Town</label>
         <div class="search-wrap">
-          <input type="text" id="cityInput" class="field-input" placeholder="Type city... e.g. Alappuzha, Changanassery, Kochi" autocomplete="off"/>
+          <input type="text" id="cityInput" class="field-input"
+            placeholder="Type city... e.g. Alappuzha, Changanassery, Kochi" autocomplete="off"/>
           <div class="dropdown" id="cityDropdown"></div>
         </div>
       </div>
 
-      <!-- Theatre -->
       <div class="field-group">
-        <label class="field-label">🎭 Theatre <span class="optional">(optional — auto loads when you pick movie + city)</span></label>
+        <label class="field-label">🎭 Theatre <span class="optional">(auto loads when movie + city selected)</span></label>
         <div class="search-wrap">
-          <input type="text" id="theatreInput" class="field-input" placeholder="Select movie and city first..." autocomplete="off" disabled/>
+          <input type="text" id="theatreInput" class="field-input"
+            placeholder="Select movie and city first..." autocomplete="off" disabled/>
           <div class="dropdown" id="theatreDropdown"></div>
         </div>
         <div class="selected-theatre" id="selectedTheatreBox" style="display:none">
@@ -89,7 +159,7 @@
       <div class="status-msg" id="statusMsg"></div>
     </div>
 
-    <!-- Active Monitors -->
+    <!-- ── ACTIVE MONITORS ── -->
     <div class="card monitors-card">
       <div class="card-header">
         <div class="step-badge">02</div>
@@ -99,12 +169,12 @@
       <div id="monitorsContainer">
         <div class="empty-state">
           <div class="empty-icon">🎯</div>
-          <p>No active monitors yet.<br>Set your movie above to start!</p>
+          <p>No active monitors yet.<br>Add a movie and start monitoring!</p>
         </div>
       </div>
     </div>
 
-    <!-- Logs -->
+    <!-- ── LOGS ── -->
     <div class="card logs-card">
       <div class="card-header">
         <div class="step-badge">03</div>
