@@ -17,8 +17,7 @@
       <span class="logo-text">CineAlert</span>
     </div>
     <div class="header-right">
-      <span class="movie-count-badge" id="movieCount">Loading...</span>
-      <button class="refresh-movies-btn" onclick="refreshMovies()">🔄 Auto Fetch</button>
+      <span class="movie-count-badge" id="movieCount">Connecting...</span>
     </div>
   </div>
 </header>
@@ -26,79 +25,86 @@
 <section class="hero">
   <div class="hero-inner">
     <h1 class="hero-title">Never Miss a<br><span class="accent">Movie Booking</span></h1>
-    <p class="hero-sub">Set your movie, city & theatre. We monitor BookMyShow every 30 seconds and alert you the moment booking opens — WhatsApp + phone call.</p>
+    <p class="hero-sub">Add your movie, pick city & theatre. CineAlert monitors BookMyShow every 30 seconds — alerts you instantly via WhatsApp + phone call the moment booking opens.</p>
   </div>
 </section>
 
 <main class="app-main">
   <div class="container">
 
-    <!-- ── ADD MOVIE MANUALLY ── -->
+    <!-- ── ADD MOVIE ── -->
     <div class="card add-movie-card">
       <div class="card-header">
-        <div class="step-badge" style="background:linear-gradient(135deg,#f77f00,#d62828)">➕</div>
-        <h2>Add Movie to Database</h2>
-        <button class="refresh-btn" onclick="toggleAddMovie()">▼ Expand</button>
+        <div class="step-badge orange">➕</div>
+        <h2>Add Movie</h2>
+        <button class="toggle-btn" id="toggleBtn" onclick="toggleAddMovie()">▼ Expand</button>
       </div>
 
       <div id="addMovieSection" style="display:none">
         <div class="info-box">
-          💡 <strong>How to get movie code:</strong><br>
-          Open BookMyShow app → Click any movie → Copy the URL<br>
-          Example URL: <code>https://in.bookmyshow.com/buytickets/<b>varavu</b>/movie-kochi-<b>ET00380235</b>-MT/</code><br>
-          Just paste the full URL below — code is auto extracted! ✅
+          💡 <strong>How to add a movie:</strong><br>
+          Open BookMyShow app → Click any movie → Share / Copy link → Paste below.<br>
+          Everything auto fills — name, poster, language, genre! ✅
         </div>
 
-        <div class="add-movie-form">
-          <div class="field-group">
-            <label class="field-label">📋 Paste BMS Movie URL <span class="optional">(auto extracts code)</span></label>
+        <!-- URL Paste -->
+        <div class="field-group">
+          <label class="field-label">🔗 Paste BookMyShow Movie URL</label>
+          <div class="url-input-wrap">
             <input type="text" id="bmsUrlInput" class="field-input"
-              placeholder="https://in.bookmyshow.com/buytickets/varavu/movie-kochi-ET00380235-MT/"
-              oninput="extractFromUrl(this.value)"/>
-          </div>
-
-          <div class="form-row">
-            <div class="field-group" style="flex:2">
-              <label class="field-label">🎬 Movie Name *</label>
-              <input type="text" id="addMovieName" class="field-input" placeholder="e.g. Varavu"/>
-            </div>
-            <div class="field-group" style="flex:1">
-              <label class="field-label">🔑 Movie Code *</label>
-              <input type="text" id="addMovieCode" class="field-input" placeholder="e.g. ET00380235"/>
+              placeholder="https://in.bookmyshow.com/buytickets/zoom/movie-kochi-ET00399999-MT/"
+              oninput="onUrlInput(this.value)"/>
+            <div class="url-loading" id="urlLoading" style="display:none">
+              <div class="spinner"></div> Fetching movie info...
             </div>
           </div>
-
-          <div class="form-row">
-            <div class="field-group" style="flex:1">
-              <label class="field-label">🌐 Language</label>
-              <input type="text" id="addMovieLang" class="field-input" placeholder="Malayalam"/>
-            </div>
-            <div class="field-group" style="flex:1">
-              <label class="field-label">🎭 Genre</label>
-              <input type="text" id="addMovieGenre" class="field-input" placeholder="Drama"/>
-            </div>
-            <div class="field-group" style="flex:1">
-              <label class="field-label">📅 Status</label>
-              <select id="addMovieStatus" class="field-input">
-                <option value="now_showing">Now Showing</option>
-                <option value="coming_soon">Coming Soon</option>
-              </select>
-            </div>
-          </div>
-
-          <button class="btn-add" onclick="addMovieManual()">
-            ➕ Add Movie to Database
-          </button>
-          <div class="status-msg" id="addMovieMsg"></div>
         </div>
+
+        <!-- Preview Card -->
+        <div class="movie-preview" id="moviePreview" style="display:none">
+          <img id="previewPoster" src="" alt="poster" class="preview-poster"/>
+          <div class="preview-info">
+            <div class="preview-name" id="previewName"></div>
+            <div class="preview-meta" id="previewMeta"></div>
+            <div class="preview-code" id="previewCode"></div>
+          </div>
+          <div class="preview-status" id="previewStatus"></div>
+        </div>
+
+        <!-- Hidden fields auto filled -->
+        <div class="form-row" id="manualFields">
+          <div class="field-group" style="flex:2">
+            <label class="field-label">🎬 Movie Name *</label>
+            <input type="text" id="addMovieName" class="field-input" placeholder="e.g. Zoom"/>
+          </div>
+          <div class="field-group" style="flex:1">
+            <label class="field-label">🔑 Code *</label>
+            <input type="text" id="addMovieCode" class="field-input" placeholder="ET00XXXXXX"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field-group" style="flex:1">
+            <label class="field-label">🌐 Language</label>
+            <input type="text" id="addMovieLang" class="field-input" placeholder="Malayalam"/>
+          </div>
+          <div class="field-group" style="flex:1">
+            <label class="field-label">🎭 Genre</label>
+            <input type="text" id="addMovieGenre" class="field-input" placeholder="Drama"/>
+          </div>
+        </div>
+
+        <button class="btn-add" onclick="addMovieManual()">
+          ➕ Add to Database
+        </button>
+        <div class="status-msg" id="addMovieMsg"></div>
 
         <!-- Movie List -->
         <div class="movie-list-header">
-          <h3>Movies in Database</h3>
+          <h3>📋 Movies in Database</h3>
           <button class="refresh-btn" onclick="loadMovieList()">↻ Refresh</button>
         </div>
         <div id="movieListContainer">
-          <div class="empty-state"><p>No movies yet. Add one above!</p></div>
+          <div class="empty-state"><p>No movies yet.</p></div>
         </div>
       </div>
     </div>
@@ -110,15 +116,17 @@
         <h2>Set Your Preferences</h2>
       </div>
 
+      <!-- Movie Search -->
       <div class="field-group">
         <label class="field-label">🎬 Movie Name</label>
         <div class="search-wrap">
           <input type="text" id="movieInput" class="field-input"
-            placeholder="Type movie name... (add movies above first)" autocomplete="off"/>
+            placeholder="Type movie name to search..." autocomplete="off"/>
           <div class="dropdown" id="movieDropdown"></div>
         </div>
         <div class="selected-movie" id="selectedMovieBox" style="display:none">
           <img id="selectedMoviePoster" src="" alt="poster" class="mini-poster" style="display:none"/>
+          <div class="no-poster-icon" id="noPosterIcon" style="display:none">🎬</div>
           <div class="selected-movie-info">
             <div class="selected-movie-name" id="selectedMovieName"></div>
             <div class="selected-movie-meta" id="selectedMovieMeta"></div>
@@ -127,20 +135,25 @@
         </div>
       </div>
 
+      <!-- City -->
       <div class="field-group">
         <label class="field-label">🏙️ City / District / Town</label>
         <div class="search-wrap">
           <input type="text" id="cityInput" class="field-input"
-            placeholder="Type city... e.g. Alappuzha, Changanassery, Kochi" autocomplete="off"/>
+            placeholder="Type city... e.g. Alappuzha, Kochi, Changanassery" autocomplete="off"/>
           <div class="dropdown" id="cityDropdown"></div>
         </div>
       </div>
 
+      <!-- Theatre -->
       <div class="field-group">
-        <label class="field-label">🎭 Theatre <span class="optional">(auto loads when movie + city selected)</span></label>
+        <label class="field-label">
+          🎭 Theatre
+          <span class="optional">— auto loads all theatres when city is selected</span>
+        </label>
         <div class="search-wrap">
           <input type="text" id="theatreInput" class="field-input"
-            placeholder="Select movie and city first..." autocomplete="off" disabled/>
+            placeholder="Select a city first..." autocomplete="off" disabled/>
           <div class="dropdown" id="theatreDropdown"></div>
         </div>
         <div class="selected-theatre" id="selectedTheatreBox" style="display:none">
@@ -148,8 +161,11 @@
             <div class="theatre-name" id="selectedTheatreName"></div>
             <div class="theatre-area" id="selectedTheatreArea"></div>
           </div>
-          <a id="mapsLink" href="#" target="_blank" class="maps-btn">📍 View on Maps</a>
+          <a id="mapsLink" href="#" target="_blank" class="maps-btn">📍 Maps</a>
           <button class="clear-btn" onclick="clearTheatre()">✕</button>
+        </div>
+        <div class="theatre-note" id="theatreNote" style="display:none">
+          ⚠️ No theatre selected — will alert when ANY theatre in this city opens booking.
         </div>
       </div>
 
@@ -169,7 +185,7 @@
       <div id="monitorsContainer">
         <div class="empty-state">
           <div class="empty-icon">🎯</div>
-          <p>No active monitors yet.<br>Add a movie and start monitoring!</p>
+          <p>No monitors yet.<br>Add a movie above to get started!</p>
         </div>
       </div>
     </div>
@@ -191,7 +207,7 @@
 <div class="toast" id="toast"></div>
 
 <footer class="footer">
-  <p>Developed by <strong>Aibin Joseph</strong> · CineAlert v3.0</p>
+  <p>Developed by <strong>Aibin Joseph</strong> · CineAlert v4.0 · Kerala</p>
 </footer>
 
 <script src="js/app.js"></script>

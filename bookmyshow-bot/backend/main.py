@@ -7,6 +7,7 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 from twilio.rest import Client as TwilioClient
 from theatres import get_theatres_for_city
+from bs4 import BeautifulSoup
 
 # ─── Config ────────────────────────────────────────────────────────────────────
 TWILIO_ACCOUNT_SID   = os.getenv("TWILIO_ACCOUNT_SID", "")
@@ -124,8 +125,109 @@ MOBILE_HEADERS = {
     "Accept-Language": "en-IN",
     "appCode":         "MOBAND2",
     "appVersion":      "14310",
-    "Content-Type":    "application/json",
 }
+
+WEB_HEADERS = {
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122 Safari/537.36",
+    "Accept":          "text/html,application/xhtml+xml,*/*",
+    "Accept-Language": "en-IN,en;q=0.9",
+    "Referer":         "https://in.bookmyshow.com/",
+}
+
+# ─── Extract Movie Info From BMS URL ──────────────────────────────────────────
+async def extract_movie_from_url(bms_url: str) -> dict:
+    """
+    Extract movie name, code, poster, language, genre from BMS URL
+    by fetching the actual movie page
+    """
+    result = {
+        "name": "", "code": "", "poster": "",
+        "language": "", "genre": "", "status": "now_showing", "error": ""
+    }
+
+    # Extract code from URL first
+    code_match = re.search(r'-([A-Z0-9]{8,12})-MT', bms_url, re.IGNORECASE)
+    if not code_match:
+        result["error"] = "Could not find movie code in URL. Make sure it's a valid BMS movie URL."
+        return result
+    result["code"] = code_match.group(1).upper()
+
+    # Extract name from URL slug
+    name_match = re.search(r'/buytickets/([^/]+)/', bms_url)
+    if name_match:
+        raw = name_match.group(1).replace('-', ' ')
+        result["name"] = raw.title()
+
+    # Detect coming soon from URL
+    if 'coming-soon' in bms_url.lower():
+        result["status"] = "coming_soon"
+
+    # Now try to fetch the actual page to get poster, language, genre
+    try:
+        async with httpx.AsyncClient(timeout=15, headers=WEB_HEADERS, follow_redirects=True) as client:
+            resp = await client.get(bms_url)
+            print(f"BMS page fetch: {resp.status_code}")
+
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+
+                # Try Next.js data
+                next_data = soup.find("script", {"id": "__NEXT_DATA__"})
+                if next_data:
+                    try:
+                        data  = json.loads(next_data.string)
+                        props = data.get("props", {}).get("pageProps", {})
+                        movie = (props.get("movieData") or
+                                 props.get("eventData") or
+                                 props.get("data", {}).get("movie") or {})
+
+                        if movie:
+                            result["name"]     = movie.get("name") or movie.get("EventTitle") or result["name"]
+                            result["poster"]   = movie.get("imageUrl") or movie.get("EventImageUrl") or movie.get("posterUrl") or ""
+                            result["language"] = movie.get("language") or movie.get("EventLanguage") or ""
+                            result["genre"]    = movie.get("genre") or movie.get("EventGenre") or ""
+                            print(f"  Got from Next.js: {result['name']} | poster: {bool(result['poster'])}")
+                    except Exception as e:
+                        print(f"  Next.js parse error: {e}")
+
+                # Try meta tags as fallback
+                if not result["poster"]:
+                    og_image = soup.find("meta", {"property": "og:image"})
+                    if og_image:
+                        result["poster"] = og_image.get("content", "")
+
+                if not result["name"] or result["name"] == result["name"].lower():
+                    og_title = soup.find("meta", {"property": "og:title"})
+                    if og_title:
+                        title = og_title.get("content", "")
+                        # Clean up title like "Varavu - Book Tickets Online" → "Varavu"
+                        result["name"] = re.split(r'\s*[-|]\s*', title)[0].strip()
+
+                # Try JSON-LD
+                for script in soup.find_all("script", {"type": "application/ld+json"}):
+                    try:
+                        ld = json.loads(script.string)
+                        if isinstance(ld, list): ld = ld[0]
+                        if ld.get("@type") in ["Movie", "Event"]:
+                            result["name"]     = ld.get("name", result["name"])
+                            result["poster"]   = ld.get("image", result["poster"])
+                            result["language"] = ld.get("inLanguage", result["language"])
+                            result["genre"]    = ld.get("genre", result["genre"])
+                    except:
+                        pass
+
+    except Exception as e:
+        print(f"Page fetch error: {e}")
+        result["error"] = f"Could not fetch movie details. Basic info extracted from URL."
+
+    # Clean up language if it's a list
+    if isinstance(result["language"], list):
+        result["language"] = ", ".join(result["language"])
+    if isinstance(result["genre"], list):
+        result["genre"] = ", ".join(result["genre"])
+
+    print(f"Final extracted: {result}")
+    return result
 
 # ─── Booking Check ──────────────────────────────────────────────────────────────
 def build_bms_url(movie_code: str, city_code: str, movie_name: str) -> str:
@@ -133,12 +235,6 @@ def build_bms_url(movie_code: str, city_code: str, movie_name: str) -> str:
     return f"https://in.bookmyshow.com/buytickets/{slug}/movie-{city_code.lower()}-{movie_code}-MT/"
 
 async def check_booking_open(movie_code: str, city_code: str, theatre_name: str = "") -> dict:
-    """
-    Returns dict:
-      found: bool
-      theatre_found: bool (True if specific theatre is showing)
-      all_theatres: list of theatre names showing the movie
-    """
     try:
         url = (f"https://in.bookmyshow.com/api/movies-data/showtimes-by-event"
                f"?appCode=MOBAND2&appVersion=14310&language=en"
@@ -147,24 +243,18 @@ async def check_booking_open(movie_code: str, city_code: str, theatre_name: str 
         async with httpx.AsyncClient(timeout=12, headers=MOBILE_HEADERS, follow_redirects=True) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
-                data   = resp.json()
-                shows  = data.get("BookMyShow", {}).get("arrShowDetails", [])
+                data  = resp.json()
+                shows = data.get("BookMyShow", {}).get("arrShowDetails", [])
                 if not shows:
                     return {"found": False, "theatre_found": False, "all_theatres": []}
-
                 all_names = [s.get("ShowName", "") for s in shows]
-
-                # If no specific theatre selected → any theatre is fine
                 if not theatre_name:
                     return {"found": True, "theatre_found": True, "all_theatres": all_names}
-
-                # Check if selected theatre is in the list
                 theatre_found = any(
-                    theatre_name.lower() in name.lower() or name.lower() in theatre_name.lower()
-                    for name in all_names
+                    theatre_name.lower() in n.lower() or n.lower() in theatre_name.lower()
+                    for n in all_names
                 )
                 return {"found": True, "theatre_found": theatre_found, "all_theatres": all_names}
-
     except Exception as e:
         print(f"Booking check error: {e}")
     return {"found": False, "theatre_found": False, "all_theatres": []}
@@ -199,72 +289,41 @@ async def monitor_loop():
                 "SELECT * FROM monitors WHERE status='active' AND notified=0"
             ).fetchall()
             conn.close()
-
             for m in monitors:
-                mid          = m["id"]
-                movie_name   = m["movie_name"]
-                movie_code   = m["movie_code"]
-                city_code    = m["city_code"]
                 theatre_name = m["theatre"] or ""
-                city         = m["city"]
-
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking: {movie_name} | {city} | Theatre: {theatre_name or 'Any'}")
-
-                result = await check_booking_open(movie_code, city_code, theatre_name)
-
-                # If specific theatre selected — wait only for that theatre
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking: {m['movie_name']} | {m['city']} | {theatre_name or 'Any Theatre'}")
+                result = await check_booking_open(m["movie_code"], m["city_code"], theatre_name)
                 if theatre_name:
                     if result["found"] and result["theatre_found"]:
-                        # Selected theatre booking is open!
-                        await notify_and_update(m, city_code, f"🎭 {theatre_name} booking open!")
+                        await notify_and_update(m, m["city_code"], f"🎭 {theatre_name} booking is OPEN!")
                     elif result["found"] and not result["theatre_found"]:
-                        # Other theatres open but not selected one yet
-                        other = ", ".join(result["all_theatres"][:3])
-                        print(f"  ℹ️ Booking open in other theatres ({other}) but NOT in {theatre_name} yet")
+                        others = ", ".join(result["all_theatres"][:3])
                         conn = get_db()
                         conn.execute("INSERT INTO logs (monitor_id, message) VALUES (?, ?)",
-                            (mid, f"⏳ Booking open in other theatres but {theatre_name} not yet. Others: {other}"))
-                        conn.commit()
-                        conn.close()
+                            (m["id"], f"⏳ Other theatres open ({others}) but {theatre_name} not yet..."))
+                        conn.commit(); conn.close()
                 else:
-                    # No theatre selected — notify when any theatre opens
                     if result["found"]:
                         theatres_str = ", ".join(result["all_theatres"][:3])
-                        await notify_and_update(m, city_code, f"🎭 Now showing at: {theatres_str}")
-
+                        await notify_and_update(m, m["city_code"], f"🎭 Now showing at: {theatres_str}")
         except Exception as e:
-            print(f"Monitor loop error: {e}")
+            print(f"Monitor error: {e}")
         await asyncio.sleep(30)
 
 async def notify_and_update(m, city_code: str, theatre_msg: str):
-    mid        = m["id"]
-    movie_name = m["movie_name"]
-    movie_code = m["movie_code"]
-    city       = m["city"]
-    theatre    = m["theatre"] or "Any Theatre"
-
-    booking_url = build_bms_url(movie_code, city_code, movie_name)
-
+    booking_url = build_bms_url(m["movie_code"], city_code, m["movie_name"])
     conn = get_db()
     conn.execute(
         "UPDATE monitors SET notified=1, status='opened', booking_url=?, opened_at=? WHERE id=?",
-        (booking_url, datetime.now().isoformat(), mid)
-    )
+        (booking_url, datetime.now().isoformat(), m["id"]))
     conn.execute("INSERT INTO logs (monitor_id, message) VALUES (?, ?)",
-        (mid, f"🎬 Booking opened! {movie_name} → {theatre_msg} → {booking_url}"))
-    conn.commit()
-    conn.close()
-
-    msg = (
-        f"🎬 BOOKING OPEN!\n"
-        f"🎥 Movie: {movie_name}\n"
-        f"🏙️ City: {city}\n"
-        f"🎭 {theatre_msg}\n"
-        f"🔗 Book Now: {booking_url}"
-    )
+        (m["id"], f"🎬 OPEN! {m['movie_name']} → {theatre_msg} → {booking_url}"))
+    conn.commit(); conn.close()
+    msg = (f"🎬 BOOKING OPEN!\n🎥 {m['movie_name']}\n🏙️ {m['city']}\n"
+           f"{theatre_msg}\n🔗 {booking_url}")
     send_whatsapp(msg)
-    send_call(f"Alert! Booking is now open for {movie_name} in {city}. Go book now!")
-    print(f"✅ NOTIFIED: {movie_name} | {city}")
+    send_call(f"Alert! Booking open for {m['movie_name']} in {m['city']}. Book now!")
+    print(f"✅ NOTIFIED: {m['movie_name']} | {m['city']}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -273,27 +332,19 @@ async def lifespan(app: FastAPI):
     yield
     task.cancel()
 
-# ─── FastAPI App ────────────────────────────────────────────────────────────────
-app = FastAPI(title="CineAlert v3", lifespan=lifespan)
+# ─── App ────────────────────────────────────────────────────────────────────────
+app = FastAPI(title="CineAlert v4", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 class MonitorCreate(BaseModel):
-    movie_name:   str
-    movie_code:   str
-    movie_poster: Optional[str] = ""
-    city:         str
-    theatre:      Optional[str] = ""
-    theatre_code: Optional[str] = ""
-    theatre_url:  Optional[str] = ""
-    maps_url:     Optional[str] = ""
+    movie_name: str; movie_code: str; movie_poster: Optional[str] = ""
+    city: str; theatre: Optional[str] = ""; theatre_code: Optional[str] = ""
+    theatre_url: Optional[str] = ""; maps_url: Optional[str] = ""
 
 class MovieAdd(BaseModel):
-    name:     str
-    code:     str
-    poster:   Optional[str] = ""
-    language: Optional[str] = ""
-    genre:    Optional[str] = ""
-    status:   Optional[str] = "now_showing"
+    name: str; code: str; poster: Optional[str] = ""
+    language: Optional[str] = ""; genre: Optional[str] = ""
+    status: Optional[str] = "now_showing"
 
 # ─── Routes ─────────────────────────────────────────────────────────────────────
 @app.get("/")
@@ -302,7 +353,17 @@ def root():
     count = conn.execute("SELECT COUNT(*) as c FROM movies").fetchone()["c"]
     mon   = conn.execute("SELECT COUNT(*) as c FROM monitors WHERE status='active'").fetchone()["c"]
     conn.close()
-    return {"status": "CineAlert v3 running!", "movies_in_db": count, "active_monitors": mon}
+    return {"status": "CineAlert v4 running!", "movies_in_db": count, "active_monitors": mon}
+
+@app.get("/api/extract-movie")
+async def api_extract_movie(url: str):
+    """Extract movie info from BMS URL automatically"""
+    if "bookmyshow.com" not in url:
+        raise HTTPException(400, "Please paste a valid BookMyShow URL")
+    result = await extract_movie_from_url(url)
+    if not result["code"]:
+        raise HTTPException(400, result.get("error", "Could not extract movie info"))
+    return result
 
 @app.get("/api/search/movies")
 def api_search_movies(q: str):
@@ -322,21 +383,19 @@ def api_cities(q: str = ""):
 
 @app.get("/api/search/theatres")
 def api_search_theatres(city: str, q: str = ""):
-    """Return theatres from local hardcoded data — always accurate, never blocked"""
     city_code = get_city_code(city)
     theatres  = get_theatres_for_city(city_code)
-    if q:
-        theatres = [t for t in theatres if q.lower() in t["name"].lower()]
+    if q: theatres = [t for t in theatres if q.lower() in t["name"].lower()]
     return {"theatres": theatres, "total": len(theatres)}
 
 @app.post("/api/movies/add")
 def add_movie_manual(data: MovieAdd):
     if not data.name or not data.code:
-        raise HTTPException(400, "Movie name and code required!")
+        raise HTTPException(400, "Name and code required!")
     conn = get_db()
     conn.execute("""
-        INSERT INTO movies (name, code, poster, language, genre, status, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO movies (name,code,poster,language,genre,status,updated_at)
+        VALUES (?,?,?,?,?,?,?)
         ON CONFLICT(code) DO UPDATE SET
             name=excluded.name, poster=excluded.poster,
             language=excluded.language, genre=excluded.genre,
@@ -366,15 +425,11 @@ def delete_movie(code: str):
 def create_monitor(data: MonitorCreate):
     city_code = get_city_code(data.city)
     conn = get_db()
-    if conn.execute(
-        "SELECT id FROM monitors WHERE movie_code=? AND city_code=? AND status='active'",
-        (data.movie_code, city_code)).fetchone():
-        conn.close()
-        raise HTTPException(400, "Already monitoring this movie in this city!")
-    cur = conn.execute("""
-        INSERT INTO monitors
-        (movie_name,movie_code,movie_poster,city,city_code,theatre,theatre_code,theatre_url,maps_url)
-        VALUES (?,?,?,?,?,?,?,?,?)""",
+    if conn.execute("SELECT id FROM monitors WHERE movie_code=? AND city_code=? AND status='active'",
+                    (data.movie_code, city_code)).fetchone():
+        conn.close(); raise HTTPException(400, "Already monitoring this movie in this city!")
+    cur = conn.execute(
+        "INSERT INTO monitors (movie_name,movie_code,movie_poster,city,city_code,theatre,theatre_code,theatre_url,maps_url) VALUES (?,?,?,?,?,?,?,?,?)",
         (data.movie_name, data.movie_code, data.movie_poster, data.city, city_code,
          data.theatre, data.theatre_code, data.theatre_url, data.maps_url))
     conn.commit(); mid = cur.lastrowid; conn.close()
