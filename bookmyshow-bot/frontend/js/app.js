@@ -25,13 +25,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadMovieCount() {
   try {
-    const res  = await fetch(`${API}/`);
+    const res  = await fetch(`${API}/`, { signal: AbortSignal.timeout(8000) });
     const data = await res.json();
     const el   = document.getElementById('movieCount');
     if (el) el.textContent = `${data.movies_in_db} movies · ${data.active_monitors} monitoring`;
   } catch(e) {
     const el = document.getElementById('movieCount');
-    if (el) el.textContent = 'Connecting...';
+    if (el) el.textContent = 'Backend waking up... ⏳';
+    // Retry after 5 seconds
+    setTimeout(loadMovieCount, 5000);
   }
 }
 

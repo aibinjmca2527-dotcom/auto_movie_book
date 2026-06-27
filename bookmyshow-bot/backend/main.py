@@ -16,7 +16,7 @@ TWILIO_FROM_PHONE    = os.getenv("TWILIO_FROM_PHONE", "")
 TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
 USER_PHONE           = os.getenv("USER_PHONE", "")
 USER_WHATSAPP        = os.getenv("USER_WHATSAPP", "")
-DB_PATH              = os.getenv("DB_PATH", "cinealert.db")
+DB_PATH              = os.getenv("DB_PATH", "/tmp/cinealert.db")
 
 # ─── Kerala Cities ─────────────────────────────────────────────────────────────
 KERALA_CITIES = {
