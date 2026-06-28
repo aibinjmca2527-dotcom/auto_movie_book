@@ -142,15 +142,26 @@ async def extract_movie_from_url(bms_url: str) -> dict:
         "language": "", "genre": "", "status": "now_showing", "error": ""
     }
 
-    # Extract code from URL
-    code_match = re.search(r'-([A-Z0-9]{6,12})-MT', bms_url, re.IGNORECASE)
+    # Extract code from URL — supports multiple BMS URL formats:
+    # Format 1: /buytickets/varavu/movie-kochi-ET00487488-MT/
+    # Format 2: /movies/kochi/varavu/ET00487488
+    # Format 3: /ET00487488 (just code at end)
+    code_match = (
+        re.search(r'-([A-Z0-9]{6,12})-MT', bms_url, re.IGNORECASE) or
+        re.search(r'/([A-Z]{2}\d{6,10})(?:/|\?|$)', bms_url, re.IGNORECASE) or
+        re.search(r'[/=]([A-Z]{2}\d{5,10})(?:[/?#]|$)', bms_url, re.IGNORECASE)
+    )
     if not code_match:
-        result["error"] = "Could not find movie code in URL."
+        result["error"] = "Could not find movie code in URL. Make sure it's a valid BookMyShow URL."
         return result
     result["code"] = code_match.group(1).upper()
 
-    # Extract name from URL slug
-    name_match = re.search(r'/buytickets/([^/]+)/', bms_url)
+    # Extract name from URL — supports both formats
+    name_match = (
+        re.search(r'/buytickets/([^/]+)/', bms_url) or
+        re.search(r'/movies/[^/]+/([^/]+)/', bms_url) or
+        re.search(r'/movies/[^/]+/([^/]+)$', bms_url)
+    )
     if name_match:
         result["name"] = name_match.group(1).replace('-', ' ').title()
 
@@ -347,7 +358,7 @@ def root():
 
 @app.get("/api/extract-movie")
 async def api_extract_movie(url: str):
-    if "bookmyshow.com" not in url:
+    if "bookmyshow" not in url:
         raise HTTPException(400, "Please paste a valid BookMyShow URL")
     result = await extract_movie_from_url(url)
     if not result["code"]:

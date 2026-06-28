@@ -32,7 +32,7 @@ function onUrlInput(val) {
   clearTimeout(urlDebounce);
   const preview = document.getElementById('moviePreview');
   const loading = document.getElementById('urlLoading');
-  if (!val.trim() || !val.includes('bookmyshow.com')) {
+  if (!val.trim() || !val.includes('bookmyshow')) {
     preview.style.display = 'none'; loading.style.display = 'none'; return;
   }
   loading.style.display = 'flex'; preview.style.display = 'none';
