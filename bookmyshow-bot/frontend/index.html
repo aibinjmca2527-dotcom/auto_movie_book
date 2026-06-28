@@ -16,16 +16,14 @@
       <span class="logo-icon">🎬</span>
       <span class="logo-text">CineAlert</span>
     </div>
-    <div class="header-right">
-      <span class="movie-count-badge" id="movieCount">Connecting...</span>
-    </div>
+    <span class="movie-count-badge" id="movieCount">Connecting...</span>
   </div>
 </header>
 
 <section class="hero">
   <div class="hero-inner">
     <h1 class="hero-title">Never Miss a<br><span class="accent">Movie Booking</span></h1>
-    <p class="hero-sub">Add your movie, pick city & theatre. CineAlert monitors BookMyShow every 30 seconds — alerts you instantly via WhatsApp + phone call the moment booking opens.</p>
+    <p class="hero-sub">Add your movie, pick city & theatre. CineAlert monitors BookMyShow every 30 seconds — WhatsApp + phone call the moment booking opens.</p>
   </div>
 </section>
 
@@ -33,7 +31,7 @@
   <div class="container">
 
     <!-- ── ADD MOVIE ── -->
-    <div class="card add-movie-card">
+    <div class="card add-card">
       <div class="card-header">
         <div class="step-badge orange">➕</div>
         <h2>Add Movie</h2>
@@ -42,43 +40,41 @@
 
       <div id="addMovieSection" style="display:none">
         <div class="info-box">
-          💡 <strong>How to add a movie:</strong><br>
-          Open BookMyShow app → Click any movie → Share / Copy link → Paste below.<br>
-          Everything auto fills — name, poster, language, genre! ✅
+          💡 <strong>How to add:</strong> Open BookMyShow app → Click any movie → Share/Copy link → Paste below. Everything auto fills! ✅
         </div>
 
-        <!-- URL Paste -->
         <div class="field-group">
           <label class="field-label">🔗 Paste BookMyShow Movie URL</label>
-          <div class="url-input-wrap">
-            <input type="text" id="bmsUrlInput" class="field-input"
-              placeholder="https://in.bookmyshow.com/buytickets/zoom/movie-kochi-ET00399999-MT/"
-              oninput="onUrlInput(this.value)"/>
-            <div class="url-loading" id="urlLoading" style="display:none">
-              <div class="spinner"></div> Fetching movie info...
+          <input type="text" id="bmsUrlInput" class="field-input"
+            placeholder="https://in.bookmyshow.com/buytickets/zoom/movie-kochi-ET00399999-MT/"
+            oninput="onUrlInput(this.value)"/>
+          <div class="url-loading" id="urlLoading" style="display:none">
+            <div class="spinner"></div> Fetching movie details from BookMyShow...
+          </div>
+        </div>
+
+        <!-- Preview after URL extract -->
+        <div class="movie-preview" id="moviePreview" style="display:none">
+          <img id="previewPoster" src="" alt="poster" class="preview-poster" style="display:none"/>
+          <div class="preview-no-poster" id="previewNoIcon" style="display:none">🎬</div>
+          <div class="preview-info">
+            <div class="preview-name" id="previewName"></div>
+            <div class="preview-meta" id="previewMeta"></div>
+            <div class="preview-badges">
+              <span class="preview-code" id="previewCode"></span>
+              <span class="preview-status" id="previewStatus"></span>
             </div>
           </div>
         </div>
 
-        <!-- Preview Card -->
-        <div class="movie-preview" id="moviePreview" style="display:none">
-          <img id="previewPoster" src="" alt="poster" class="preview-poster"/>
-          <div class="preview-info">
-            <div class="preview-name" id="previewName"></div>
-            <div class="preview-meta" id="previewMeta"></div>
-            <div class="preview-code" id="previewCode"></div>
-          </div>
-          <div class="preview-status" id="previewStatus"></div>
-        </div>
-
-        <!-- Hidden fields auto filled -->
-        <div class="form-row" id="manualFields">
+        <!-- Manual fields (auto filled from URL) -->
+        <div class="form-row">
           <div class="field-group" style="flex:2">
             <label class="field-label">🎬 Movie Name *</label>
             <input type="text" id="addMovieName" class="field-input" placeholder="e.g. Zoom"/>
           </div>
           <div class="field-group" style="flex:1">
-            <label class="field-label">🔑 Code *</label>
+            <label class="field-label">🔑 Movie Code *</label>
             <input type="text" id="addMovieCode" class="field-input" placeholder="ET00XXXXXX"/>
           </div>
         </div>
@@ -93,18 +89,15 @@
           </div>
         </div>
 
-        <button class="btn-add" onclick="addMovieManual()">
-          ➕ Add to Database
-        </button>
+        <button class="btn-add" onclick="addMovieManual()">➕ Add Movie to Database</button>
         <div class="status-msg" id="addMovieMsg"></div>
 
-        <!-- Movie List -->
         <div class="movie-list-header">
           <h3>📋 Movies in Database</h3>
           <button class="refresh-btn" onclick="loadMovieList()">↻ Refresh</button>
         </div>
         <div id="movieListContainer">
-          <div class="empty-state"><p>No movies yet.</p></div>
+          <div class="empty-state"><p>No movies yet. Paste a BMS URL above!</p></div>
         </div>
       </div>
     </div>
@@ -116,7 +109,7 @@
         <h2>Set Your Preferences</h2>
       </div>
 
-      <!-- Movie Search -->
+      <!-- Movie Search with poster -->
       <div class="field-group">
         <label class="field-label">🎬 Movie Name</label>
         <div class="search-wrap">
@@ -124,12 +117,12 @@
             placeholder="Type movie name to search..." autocomplete="off"/>
           <div class="dropdown" id="movieDropdown"></div>
         </div>
-        <div class="selected-movie" id="selectedMovieBox" style="display:none">
-          <img id="selectedMoviePoster" src="" alt="poster" class="mini-poster" style="display:none"/>
-          <div class="no-poster-icon" id="noPosterIcon" style="display:none">🎬</div>
-          <div class="selected-movie-info">
-            <div class="selected-movie-name" id="selectedMovieName"></div>
-            <div class="selected-movie-meta" id="selectedMovieMeta"></div>
+        <div class="selected-box" id="selectedMovieBox" style="display:none">
+          <img id="selectedMoviePoster" src="" alt="" class="sel-poster" style="display:none"/>
+          <div class="sel-no-poster" id="selNoIcon" style="display:none">🎬</div>
+          <div class="sel-info">
+            <div class="sel-name" id="selectedMovieName"></div>
+            <div class="sel-meta" id="selectedMovieMeta"></div>
           </div>
           <button class="clear-btn" onclick="clearMovie()">✕</button>
         </div>
@@ -140,58 +133,52 @@
         <label class="field-label">🏙️ City / District / Town</label>
         <div class="search-wrap">
           <input type="text" id="cityInput" class="field-input"
-            placeholder="Type city... e.g. Alappuzha, Kochi, Changanassery" autocomplete="off"/>
+            placeholder="e.g. Alappuzha, Kochi, Changanassery" autocomplete="off"/>
           <div class="dropdown" id="cityDropdown"></div>
         </div>
       </div>
 
       <!-- Theatre -->
       <div class="field-group">
-        <label class="field-label">
-          🎭 Theatre
-          <span class="optional">— auto loads all theatres when city is selected</span>
-        </label>
+        <label class="field-label">🎭 Theatre <span class="optional">— auto loads when city is selected</span></label>
         <div class="search-wrap">
           <input type="text" id="theatreInput" class="field-input"
             placeholder="Select a city first..." autocomplete="off" disabled/>
           <div class="dropdown" id="theatreDropdown"></div>
         </div>
-        <div class="selected-theatre" id="selectedTheatreBox" style="display:none">
-          <div class="theatre-info">
-            <div class="theatre-name" id="selectedTheatreName"></div>
-            <div class="theatre-area" id="selectedTheatreArea"></div>
+        <div class="selected-box" id="selectedTheatreBox" style="display:none">
+          <div class="sel-info">
+            <div class="sel-name" id="selectedTheatreName"></div>
+            <div class="sel-meta" id="selectedTheatreArea"></div>
           </div>
           <a id="mapsLink" href="#" target="_blank" class="maps-btn">📍 Maps</a>
           <button class="clear-btn" onclick="clearTheatre()">✕</button>
         </div>
         <div class="theatre-note" id="theatreNote" style="display:none">
-          ⚠️ No theatre selected — will alert when ANY theatre in this city opens booking.
+          ⚠️ No theatre selected — will alert when ANY theatre in this city opens.
         </div>
       </div>
 
       <button class="btn-primary" id="startBtn" onclick="startMonitor()">
-        <span class="btn-icon">🚀</span> Start Monitoring
+        <span>🚀</span> Start Monitoring
       </button>
       <div class="status-msg" id="statusMsg"></div>
     </div>
 
-    <!-- ── ACTIVE MONITORS ── -->
-    <div class="card monitors-card">
+    <!-- ── MONITORS ── -->
+    <div class="card">
       <div class="card-header">
         <div class="step-badge">02</div>
         <h2>Active Monitors</h2>
         <button class="refresh-btn" onclick="loadMonitors()">↻ Refresh</button>
       </div>
       <div id="monitorsContainer">
-        <div class="empty-state">
-          <div class="empty-icon">🎯</div>
-          <p>No monitors yet.<br>Add a movie above to get started!</p>
-        </div>
+        <div class="empty-state"><div class="empty-icon">🎯</div><p>No monitors yet.</p></div>
       </div>
     </div>
 
     <!-- ── LOGS ── -->
-    <div class="card logs-card">
+    <div class="card">
       <div class="card-header">
         <div class="step-badge">03</div>
         <h2>Activity Log</h2>
@@ -205,11 +192,7 @@
 </main>
 
 <div class="toast" id="toast"></div>
-
-<footer class="footer">
-  <p>Developed by <strong>Aibin Joseph</strong> · CineAlert v4.0 · Kerala</p>
-</footer>
-
+<footer class="footer"><p>Developed by <strong>Aibin Joseph</strong> · CineAlert v4.0</p></footer>
 <script src="js/app.js"></script>
 </body>
 </html>

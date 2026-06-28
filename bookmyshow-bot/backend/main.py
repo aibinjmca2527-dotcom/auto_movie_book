@@ -125,53 +125,48 @@ MOBILE_HEADERS = {
     "Accept-Language": "en-IN",
     "appCode":         "MOBAND2",
     "appVersion":      "14310",
+    "Content-Type":    "application/json",
 }
 
 WEB_HEADERS = {
     "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122 Safari/537.36",
-    "Accept":          "text/html,application/xhtml+xml,*/*",
+    "Accept":          "text/html,application/xhtml+xml,*/*;q=0.9",
     "Accept-Language": "en-IN,en;q=0.9",
     "Referer":         "https://in.bookmyshow.com/",
 }
 
-# ─── Extract Movie Info From BMS URL ──────────────────────────────────────────
+# ─── Extract Movie from BMS URL ────────────────────────────────────────────────
 async def extract_movie_from_url(bms_url: str) -> dict:
-    """
-    Extract movie name, code, poster, language, genre from BMS URL
-    by fetching the actual movie page
-    """
     result = {
         "name": "", "code": "", "poster": "",
         "language": "", "genre": "", "status": "now_showing", "error": ""
     }
 
-    # Extract code from URL first
-    code_match = re.search(r'-([A-Z0-9]{8,12})-MT', bms_url, re.IGNORECASE)
+    # Extract code from URL
+    code_match = re.search(r'-([A-Z0-9]{6,12})-MT', bms_url, re.IGNORECASE)
     if not code_match:
-        result["error"] = "Could not find movie code in URL. Make sure it's a valid BMS movie URL."
+        result["error"] = "Could not find movie code in URL."
         return result
     result["code"] = code_match.group(1).upper()
 
     # Extract name from URL slug
     name_match = re.search(r'/buytickets/([^/]+)/', bms_url)
     if name_match:
-        raw = name_match.group(1).replace('-', ' ')
-        result["name"] = raw.title()
+        result["name"] = name_match.group(1).replace('-', ' ').title()
 
-    # Detect coming soon from URL
+    # Detect coming soon
     if 'coming-soon' in bms_url.lower():
         result["status"] = "coming_soon"
 
-    # Now try to fetch the actual page to get poster, language, genre
+    # Fetch actual BMS page to get poster, language, genre
     try:
         async with httpx.AsyncClient(timeout=15, headers=WEB_HEADERS, follow_redirects=True) as client:
             resp = await client.get(bms_url)
             print(f"BMS page fetch: {resp.status_code}")
-
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, "html.parser")
 
-                # Try Next.js data
+                # Try Next.js __NEXT_DATA__
                 next_data = soup.find("script", {"id": "__NEXT_DATA__"})
                 if next_data:
                     try:
@@ -180,30 +175,26 @@ async def extract_movie_from_url(bms_url: str) -> dict:
                         movie = (props.get("movieData") or
                                  props.get("eventData") or
                                  props.get("data", {}).get("movie") or {})
-
                         if movie:
                             result["name"]     = movie.get("name") or movie.get("EventTitle") or result["name"]
                             result["poster"]   = movie.get("imageUrl") or movie.get("EventImageUrl") or movie.get("posterUrl") or ""
                             result["language"] = movie.get("language") or movie.get("EventLanguage") or ""
                             result["genre"]    = movie.get("genre") or movie.get("EventGenre") or ""
-                            print(f"  Got from Next.js: {result['name']} | poster: {bool(result['poster'])}")
                     except Exception as e:
-                        print(f"  Next.js parse error: {e}")
+                        print(f"Next.js parse: {e}")
 
-                # Try meta tags as fallback
+                # Fallback: og tags
                 if not result["poster"]:
-                    og_image = soup.find("meta", {"property": "og:image"})
-                    if og_image:
-                        result["poster"] = og_image.get("content", "")
+                    og = soup.find("meta", {"property": "og:image"})
+                    if og: result["poster"] = og.get("content", "")
 
-                if not result["name"] or result["name"] == result["name"].lower():
+                if not result["name"] or len(result["name"]) < 2:
                     og_title = soup.find("meta", {"property": "og:title"})
                     if og_title:
-                        title = og_title.get("content", "")
-                        # Clean up title like "Varavu - Book Tickets Online" → "Varavu"
-                        result["name"] = re.split(r'\s*[-|]\s*', title)[0].strip()
+                        t = og_title.get("content", "")
+                        result["name"] = re.split(r'\s*[-|]\s*', t)[0].strip()
 
-                # Try JSON-LD
+                # JSON-LD fallback
                 for script in soup.find_all("script", {"type": "application/ld+json"}):
                     try:
                         ld = json.loads(script.string)
@@ -213,20 +204,19 @@ async def extract_movie_from_url(bms_url: str) -> dict:
                             result["poster"]   = ld.get("image", result["poster"])
                             result["language"] = ld.get("inLanguage", result["language"])
                             result["genre"]    = ld.get("genre", result["genre"])
-                    except:
-                        pass
+                    except: pass
 
     except Exception as e:
         print(f"Page fetch error: {e}")
-        result["error"] = f"Could not fetch movie details. Basic info extracted from URL."
+        result["error"] = "Could not fetch movie page. Basic info extracted from URL."
 
-    # Clean up language if it's a list
+    # Clean up list types
     if isinstance(result["language"], list):
         result["language"] = ", ".join(result["language"])
     if isinstance(result["genre"], list):
         result["genre"] = ", ".join(result["genre"])
 
-    print(f"Final extracted: {result}")
+    print(f"Extracted: {result['name']} | code:{result['code']} | poster:{bool(result['poster'])}")
     return result
 
 # ─── Booking Check ──────────────────────────────────────────────────────────────
@@ -357,7 +347,6 @@ def root():
 
 @app.get("/api/extract-movie")
 async def api_extract_movie(url: str):
-    """Extract movie info from BMS URL automatically"""
     if "bookmyshow.com" not in url:
         raise HTTPException(400, "Please paste a valid BookMyShow URL")
     result = await extract_movie_from_url(url)
