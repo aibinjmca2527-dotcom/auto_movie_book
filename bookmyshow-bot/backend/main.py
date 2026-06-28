@@ -239,28 +239,38 @@ def build_bms_url(movie_code: str, city_code: str, movie_name: str) -> str:
     return f"https://in.bookmyshow.com/buytickets/{slug}/movie-{city_code.lower()}-{movie_code}-MT/"
 
 async def check_booking_open(movie_code: str, city_code: str, theatre_name: str = "") -> dict:
-    try:
-        url = (f"https://in.bookmyshow.com/api/movies-data/showtimes-by-event"
-               f"?appCode=MOBAND2&appVersion=14310&language=en"
-               f"&eventCode={movie_code}&regionCode={city_code}"
-               f"&subRegion={city_code}&format=json")
-        async with httpx.AsyncClient(timeout=12, headers=MOBILE_HEADERS, follow_redirects=True) as client:
-            resp = await client.get(url)
-            if resp.status_code == 200:
-                data  = resp.json()
-                shows = data.get("BookMyShow", {}).get("arrShowDetails", [])
-                if not shows:
-                    return {"found": False, "theatre_found": False, "all_theatres": []}
-                all_names = [s.get("ShowName", "") for s in shows]
-                if not theatre_name:
-                    return {"found": True, "theatre_found": True, "all_theatres": all_names}
-                theatre_found = any(
-                    theatre_name.lower() in n.lower() or n.lower() in theatre_name.lower()
-                    for n in all_names
-                )
-                return {"found": True, "theatre_found": theatre_found, "all_theatres": all_names}
-    except Exception as e:
-        print(f"Booking check error: {e}")
+    endpoints = [
+        f"https://in.bookmyshow.com/api/movies-data/showtimes-by-event?appCode=MOBAND2&appVersion=14310&language=en&eventCode={movie_code}&regionCode={city_code}&subRegion={city_code}&format=json",
+        f"https://in.bookmyshow.com/serv/getData?cmd=GETSHOWTIMES&code={movie_code}&region={city_code}&format=json",
+    ]
+    for url in endpoints:
+        try:
+            async with httpx.AsyncClient(timeout=12, headers=MOBILE_HEADERS, follow_redirects=True) as client:
+                resp = await client.get(url)
+                print(f"  BMS API: {resp.status_code} | {movie_code}/{city_code}")
+                if resp.status_code == 200:
+                    data  = resp.json()
+                    shows = (data.get("BookMyShow", {}).get("arrShowDetails", []) or
+                             data.get("arrShowDetails", []))
+                    print(f"  Theatres in response: {len(shows)}")
+                    if not shows:
+                        return {"found": False, "theatre_found": False, "all_theatres": []}
+                    all_names = [s.get("ShowName", "") for s in shows]
+                    print(f"  Theatre list: {all_names[:3]}")
+                    if not theatre_name:
+                        return {"found": True, "theatre_found": True, "all_theatres": all_names}
+                    theatre_found = any(
+                        theatre_name.lower() in n.lower() or n.lower() in theatre_name.lower()
+                        for n in all_names
+                    )
+                    print(f"  '{theatre_name}' found: {theatre_found}")
+                    return {"found": True, "theatre_found": theatre_found, "all_theatres": all_names}
+                elif resp.status_code == 403:
+                    print(f"  ⚠️ 403 Blocked — trying next endpoint")
+                    continue
+        except Exception as e:
+            print(f"  Error: {e}")
+    print(f"  ❌ All endpoints blocked for {movie_code}/{city_code}")
     return {"found": False, "theatre_found": False, "all_theatres": []}
 
 # ─── Notifications ──────────────────────────────────────────────────────────────
