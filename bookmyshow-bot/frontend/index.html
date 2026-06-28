@@ -89,6 +89,20 @@
           </div>
         </div>
 
+        <!-- Status Toggle -->
+        <div class="field-group">
+          <label class="field-label">📅 Movie Status</label>
+          <div class="status-toggle">
+            <button class="stoggle-btn active" id="btnShowing" onclick="setStatus('now_showing')">
+              🎬 Now Showing
+            </button>
+            <button class="stoggle-btn" id="btnComing" onclick="setStatus('coming_soon')">
+              🔜 Coming Soon
+            </button>
+          </div>
+          <input type="hidden" id="addMovieStatus" value="now_showing"/>
+        </div>
+
         <button class="btn-add" onclick="addMovieManual()">➕ Add Movie to Database</button>
         <div class="status-msg" id="addMovieMsg"></div>
 

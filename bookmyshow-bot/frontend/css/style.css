@@ -156,6 +156,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .toast.success{border-color:var(--green)}
 .toast.error{border-color:var(--accent)}
 
+/* Status Toggle */
+.status-toggle{display:flex;gap:10px;margin-top:4px}
+.stoggle-btn{flex:1;padding:11px;background:var(--bg3);border:1.5px solid var(--border);color:var(--text2);border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.2s;font-family:'Inter',sans-serif}
+.stoggle-btn.active.showing{background:rgba(46,204,113,0.1);border-color:#2ecc71;color:#2ecc71}
+.stoggle-btn.active.coming{background:rgba(255,214,10,0.1);border-color:#ffd60a;color:#ffd60a}
+.stoggle-btn:hover{border-color:var(--accent);color:var(--text)}
+
 /* Footer */
 .footer{text-align:center;padding:22px;color:var(--text3);font-size:12px;border-top:1px solid var(--border)}
 
