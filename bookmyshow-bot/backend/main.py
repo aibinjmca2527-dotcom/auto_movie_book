@@ -142,28 +142,31 @@ async def extract_movie_from_url(bms_url: str) -> dict:
         "language": "", "genre": "", "status": "now_showing", "error": ""
     }
 
-    # Extract code from URL — supports multiple BMS URL formats:
+    # Extract code from URL — supports ALL BMS URL formats:
     # Format 1: /buytickets/varavu/movie-kochi-ET00487488-MT/
     # Format 2: /movies/kochi/varavu/ET00487488
-    # Format 3: /ET00487488 (just code at end)
+    # Format 3: /movies-coming-soon/kochi/zoom/ET00399999
     code_match = (
-        re.search(r'-([A-Z0-9]{6,12})-MT', bms_url, re.IGNORECASE) or
-        re.search(r'/([A-Z]{2}\d{6,10})(?:/|\?|$)', bms_url, re.IGNORECASE) or
-        re.search(r'[/=]([A-Z]{2}\d{5,10})(?:[/?#]|$)', bms_url, re.IGNORECASE)
+        re.search(r'-([A-Z]{2}\d{5,10})-MT', bms_url, re.IGNORECASE) or
+        re.search(r'/([A-Z]{2}\d{5,10})(?:/|\?|$|#)', bms_url, re.IGNORECASE) or
+        re.search(r'/([A-Z]{2}\d{5,10})$', bms_url, re.IGNORECASE)
     )
     if not code_match:
-        result["error"] = "Could not find movie code in URL. Make sure it's a valid BookMyShow URL."
+        result["error"] = "Could not find movie code in URL. Make sure it's a valid BookMyShow movie URL."
         return result
     result["code"] = code_match.group(1).upper()
 
-    # Extract name from URL — supports both formats
+    # Extract name from URL — supports all formats
     name_match = (
         re.search(r'/buytickets/([^/]+)/', bms_url) or
-        re.search(r'/movies/[^/]+/([^/]+)/', bms_url) or
-        re.search(r'/movies/[^/]+/([^/]+)$', bms_url)
+        re.search(r'/movies(?:-coming-soon)?/[^/]+/([^/]+)/[A-Z]{2}\d', bms_url, re.IGNORECASE) or
+        re.search(r'/movies(?:-coming-soon)?/[^/]+/([^/]+)$', bms_url, re.IGNORECASE)
     )
     if name_match:
-        result["name"] = name_match.group(1).replace('-', ' ').title()
+        raw = name_match.group(1)
+        # Skip if it looks like a code
+        if not re.match(r'^[A-Z]{2}\d+$', raw, re.IGNORECASE):
+            result["name"] = raw.replace('-', ' ').title()
 
     # Detect coming soon
     if 'coming-soon' in bms_url.lower():
