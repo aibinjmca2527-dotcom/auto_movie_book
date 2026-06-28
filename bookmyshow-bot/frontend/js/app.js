@@ -89,26 +89,14 @@ function toggleAddMovie() {
   }
 }
 
-function setStatus(val) {
-  document.getElementById('addMovieStatus').value = val;
-  const btnS = document.getElementById('btnShowing');
-  const btnC = document.getElementById('btnComing');
-  if (val === 'now_showing') {
-    btnS.className = 'stoggle-btn active showing';
-    btnC.className = 'stoggle-btn';
-  } else {
-    btnC.className = 'stoggle-btn active coming';
-    btnS.className = 'stoggle-btn';
-  }
-}
-
 async function addMovieManual() {
   const name   = document.getElementById('addMovieName').value.trim();
   const code   = document.getElementById('addMovieCode').value.trim().toUpperCase();
   const lang   = document.getElementById('addMovieLang').value.trim();
   const genre  = document.getElementById('addMovieGenre').value.trim();
-  const poster = document.getElementById('previewPoster').src || '';
-  const status = document.getElementById('addMovieStatus').value || 'now_showing';
+  const pImg = document.getElementById('previewPoster');
+  const poster = (pImg && pImg.style.display !== 'none' && pImg.src && !pImg.src.endsWith('/')) ? pImg.src : '';
+  const status = 'now_showing';
   const msg    = document.getElementById('addMovieMsg');
   if (!name) { showToast('Enter movie name!', 'error'); return; }
   if (!code) { showToast('Enter movie code! Paste BMS URL to auto-fill.', 'error'); return; }
@@ -126,7 +114,6 @@ async function addMovieManual() {
       document.getElementById(id).value = '';
     });
     document.getElementById('moviePreview').style.display = 'none';
-    setStatus('now_showing');
     loadMovieList(); loadMovieCount();
   } catch(e) { msg.style.color='#e63946'; msg.textContent='❌ '+e.message; }
 }
